@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: false, limit: "150mb" }));
-
+const axios = require("axios");
 require("dotenv").config();
 
 const morgan = require("morgan");
@@ -14,29 +14,28 @@ mongoose.connect("mongodb://localhost/pages", () => {
 	console.log("⚡ connected to db");
 });
 
-const redis = require("redis");
-const rc = redis.createClient();
-rc.on("error", function (error) {
-	console.log(error);
-});
-rc.on("connect", function (error) {
-	console.log('connected to REDIS');
-});
-rc.on("ready", function (error) {
-	console.log('connected to REDIS');
-});
-rc.on("end", function (error) {
-	console.log(error);
-});
+const { createClient } = require("redis");
+const rc = createClient();
+(async () => {
+	rc.on("error", (err) => console.log("Redis Client Error", err));
+	rc.on("connect", () => console.log("💡 Redis Client Connected"));
+	await rc.connect();
+})();
+
 const DEFAULT_EXP = 600;
 
 app.get("/", async (req, res) => {
 	const limit = parseInt(req.query.limit || 10);
 	const page = parseInt(req.query.page || 0);
 	const skip = limit * page - limit > 0 ? limit * page - limit : 0;
-	const users = await User.find().limit(limit).skip(skip);
-	await rc.setEx(`page${skip}`, DEFAULT_EXP, JSON.stringify(users));
-	res.json(users);
+	const data = await rc.get(`page${skip}`);
+	if (data) {
+		res.json(JSON.parse(data));
+	} else {
+		const users = await User.find().limit(limit).skip(skip);
+		res.json(users);
+		rc.setEx(`page${page}limit${limit}`, DEFAULT_EXP, JSON.stringify(users));
+	}
 });
 
 app.listen(3000, () => {
