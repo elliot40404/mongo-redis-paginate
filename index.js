@@ -25,14 +25,14 @@ const rc = createClient();
 const DEFAULT_EXP = 600;
 
 app.get("/", async (req, res) => {
-	const limit = parseInt(req.query.limit || 10);
+	const limit = parseInt(req.query.limit || 0);
 	const page = parseInt(req.query.page || 0);
-	const skip = limit * page - limit > 0 ? limit * page - limit : 0;
+	const skip = page ? page * 10 - 10 : 0;
 	const data = await rc.get(`page${skip}`);
 	if (data) {
 		res.json(JSON.parse(data));
 	} else {
-		const users = await User.find().limit(limit).skip(skip);
+		const users = await User.find().skip(skip).limit(limit);
 		res.json(users);
 		rc.setEx(`page${page}limit${limit}`, DEFAULT_EXP, JSON.stringify(users));
 	}
